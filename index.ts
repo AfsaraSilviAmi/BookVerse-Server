@@ -65,6 +65,91 @@ app.get("/books/:id", async (req, res) => {
     });
   }
 });
+//deleting books
+app.delete("/books/:id", async (req, res) => {
+  try {
+  const id = req.params.id;
+const email = req.query.email;
+
+const result = await bookCollection.deleteOne({
+  _id: new ObjectId(id),
+  ownerEmail: email,
+});
+    res.send(result);
+  } catch (error) {
+    console.log(error);
+
+    res.status(500).send({
+      message: "Failed to delete book",
+    });
+  }
+});//only user books
+app.get("/my-books", async (req, res) => {
+  try {
+    const email = req.query.email;
+
+    const books = await bookCollection
+      .find({ ownerEmail: email })
+      .toArray();
+
+    res.send(books);
+  } catch (error) {
+    console.log(error);
+
+    res.status(500).send({
+      message: "Failed to fetch books",
+    });
+  }
+});
+//featured book section
+app.get("/featured-books", async (req, res) => {
+  try {
+   const books = await bookCollection
+  .find({})
+  .toArray();
+
+books.sort(
+  (a, b) => (b.rating ?? 4.5) - (a.rating ?? 4.5)
+);
+
+res.send(books.slice(0, 4));
+  } catch (error) {
+    console.log(error);
+
+    res.status(500).send({
+      message: "Failed to fetch featured books",
+    });
+  }
+});
+//statistic section
+// Genre Statistics
+app.get("/genre-stats", async (req, res) => {
+  try {
+    const genres = await bookCollection
+      .aggregate([
+        {
+          $group: {
+            _id: "$genre",
+            books: { $sum: 1 },
+          },
+        },
+        {
+          $sort: {
+            books: -1,
+          },
+        },
+      ])
+      .toArray();
+
+    res.send(genres);
+  } catch (err) {
+    console.log(err);
+
+    res.status(500).send({
+      message: "Failed to fetch genre stats",
+    });
+  }
+});
 //adding book
     app.post("/books", async(req, res)=>{
         try{
@@ -78,6 +163,7 @@ app.get("/books/:id", async (req, res) => {
   price: Number(req.body.price),
   rating: Number(req.body.rating) || 0,
   createdAt: new Date(),
+  ownerEmail: req.body.ownerEmail,
 };
             const result = await bookCollection.insertOne(book);
             res.send(result)
@@ -88,6 +174,48 @@ app.get("/books/:id", async (req, res) => {
              })
         }
     })
+    //author section
+    // Popular Authors
+app.get("/popular-authors", async (req, res) => {
+  try {
+    const authors = await bookCollection
+      .aggregate([
+        {
+          $group: {
+            _id: "$author",
+            books: { $sum: 1 },
+            genres: { $addToSet: "$genre" },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            author: "$_id",
+            books: 1,
+            genres: 1,
+          },
+        },
+        {
+          $sort: {
+            books: -1,
+            author: 1,
+          },
+        },
+        {
+          $limit: 4,
+        },
+      ])
+      .toArray();
+
+    res.send(authors);
+  } catch (error) {
+    console.log(error);
+
+    res.status(500).send({
+      message: "Failed to fetch authors",
+    });
+  }
+});
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
