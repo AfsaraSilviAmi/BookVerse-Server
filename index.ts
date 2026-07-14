@@ -1,10 +1,11 @@
-import express from "express";
+import express, { type NextFunction, type Request, type Response } from "express";
 const app = express();
 import cors from "cors";
 import dotenv from "dotenv";
 
 dotenv.config();
 import { MongoClient, ObjectId, ServerApiVersion } from "mongodb";
+import { createRemoteJWKSet, jwtVerify } from "jose-cjs";
 const PORT = 5000;
 
 app.use(cors());
@@ -29,6 +30,35 @@ const client = new MongoClient(uri, {
     deprecationErrors: true,
   }
 });
+const JWKS = createRemoteJWKSet(
+  new URL(`${process.env.CLIENT_URL}/api/auth/jwks`)
+)
+
+const verifyToken = async (req:Request, res:Response, next:NextFunction) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  const token = authHeader.split(" ")[1];
+
+  if (!token) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  try {
+    const { payload } = await jwtVerify(token, JWKS);
+
+    (req as any).decoded = payload;
+
+    next();
+  } catch (error) {
+    return res.status(403).json({
+      message: "Forbidden",
+    });
+  }
+};
 
 async function run() {
   try {
@@ -37,9 +67,13 @@ async function run() {
     const db = client.db("bookverse")
     const bookCollection = db.collection("books")
     //getting books
-    app.get("/books", async (req, res) => {
+   app.get("/books", async (req, res) => {
   try {
-    const books = await bookCollection.find().toArray();
+    const books = await bookCollection
+      .find()
+      .sort({ createdAt: -1 }) // newest first
+      .toArray();
+
     res.send(books);
   } catch (error) {
     console.log(error);
@@ -66,7 +100,7 @@ app.get("/books/:id", async (req, res) => {
   }
 });
 //deleting books
-app.delete("/books/:id", async (req, res) => {
+app.delete("/books/:id", verifyToken, async (req, res) => {
   try {
   const id = req.params.id;
 const email = req.query.email;
@@ -84,7 +118,7 @@ const result = await bookCollection.deleteOne({
     });
   }
 });//only user books
-app.get("/my-books", async (req, res) => {
+app.get("/my-books", verifyToken, async (req, res) => {
   try {
     const email = req.query.email;
 
@@ -122,7 +156,6 @@ res.send(books.slice(0, 4));
   }
 });
 //statistic section
-// Genre Statistics
 app.get("/genre-stats", async (req, res) => {
   try {
     const genres = await bookCollection
@@ -151,7 +184,7 @@ app.get("/genre-stats", async (req, res) => {
   }
 });
 //adding book
-    app.post("/books", async(req, res)=>{
+    app.post("/books", verifyToken, async(req, res)=>{
         try{
            const book = {
   title: req.body.title,
@@ -175,7 +208,6 @@ app.get("/genre-stats", async (req, res) => {
         }
     })
     //author section
-    // Popular Authors
 app.get("/popular-authors", async (req, res) => {
   try {
     const authors = await bookCollection
