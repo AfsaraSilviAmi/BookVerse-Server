@@ -63,7 +63,7 @@ const verifyToken = async (req:Request, res:Response, next:NextFunction) => {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    //await client.connect();
     const db = client.db("bookverse")
     const bookCollection = db.collection("books")
     //getting books
@@ -102,13 +102,21 @@ app.get("/books/:id", async (req, res) => {
 //deleting books
 app.delete("/books/:id", verifyToken, async (req, res) => {
   try {
-  const id = req.params.id;
-const email = req.query.email;
+    const id = req.params.id;
+    const email = req.query.email;
 
-const result = await bookCollection.deleteOne({
-  _id: new ObjectId(id),
-  ownerEmail: email,
-});
+    // Make sure id is a string
+    if (typeof id !== "string") {
+      return res.status(400).send({
+        message: "Invalid book id",
+      });
+    }
+
+    const result = await bookCollection.deleteOne({
+      _id: new ObjectId(id),
+      ownerEmail: email,
+    });
+
     res.send(result);
   } catch (error) {
     console.log(error);
@@ -249,7 +257,7 @@ app.get("/popular-authors", async (req, res) => {
   }
 });
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
+   // await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
